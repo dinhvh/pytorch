@@ -273,6 +273,31 @@ at::Tensor broadcast(
   return broadcast_(output, src, group_name);
 }
 
+at::Tensor& scatter_(
+    at::Tensor& input,
+    std::vector<at::Tensor> scatter_list,
+    int64_t src,
+    std::string group_name) {
+  c10d::ScatterOptions opts;
+  opts.rootRank = src;
+  std::vector<at::Tensor> outputs{input};
+  std::vector<std::vector<at::Tensor>> inputs{scatter_list};
+
+  auto group = c10d::resolve_process_group(group_name);
+  auto work = group->scatter(outputs, inputs, opts);
+  c10d::RankLocal<WorkRegistry>::get().register_work(input, work);
+  return input;
+}
+
+at::Tensor scatter(
+    const at::Tensor& input,
+    std::vector<at::Tensor> scatter_list,
+    int64_t src,
+    std::string group_name) {
+  auto output = input.clone(at::MemoryFormat::Contiguous);
+  return scatter_(output, scatter_list, src, group_name);
+}
+
 at::Tensor wait_tensor(const at::Tensor& tensor) {
   auto work = c10d::RankLocal<WorkRegistry>::get().pop_work(tensor);
   if (work != nullptr) {
@@ -354,6 +379,16 @@ TORCH_LIBRARY(_c10d_functional, m) {
       "broadcast_(Tensor(a!) input, int src, str group_name) -> Tensor(a!)",
       torch::dispatch(
           c10::DispatchKey::CompositeExplicitAutograd, ::broadcast_),
+      {at::Tag::pt2_compliant_tag});
+
+  m.def(
+      "scatter(Tensor input, Tensor[] scatter_list, int src, str group_name) -> Tensor",
+      torch::dispatch(c10::DispatchKey::CompositeExplicitAutograd, ::scatter),
+      {at::Tag::pt2_compliant_tag});
+
+  m.def(
+      "scatter_(Tensor(a!) input, Tensor[] scatter_list, int src, str group_name) -> Tensor(a!)",
+      torch::dispatch(c10::DispatchKey::CompositeExplicitAutograd, ::scatter_),
       {at::Tag::pt2_compliant_tag});
 
   m.def(

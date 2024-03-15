@@ -259,26 +259,22 @@ class TestTraceableCollectives(MultiThreadedTestCase):
                 self.skipTest("Not enough CUDA devices")
             torch.cuda.set_device(dist.get_rank())
 
-        # Assuming a world size of 2
         tensor_size = 2
-        t_ones = torch.ones(tensor_size)
-        t_fives = torch.ones(tensor_size) * 5
-        output_tensor = torch.zeros(tensor_size)
+        tensors = [
+            torch.ones(tensor_size, device=device) * (i + 1)
+            for i in range(self.world_size)
+        ]
+        output_tensor = torch.zeros(tensor_size, device=device)
         if dist.get_rank() == 0:
             # Only tensors, all of which must be the same size.
-            scatter_list = [t_ones, t_fives]
+            scatter_list = tensors
         else:
             scatter_list = None
 
-        mesh = dt.DeviceMesh(device, torch.arange(2))
-        ft_c.scatter(output_tensor, scatter_list, 0, mesh)
+        mesh = dt.DeviceMesh(device, torch.arange(self.world_size))
+        output_tensor = ft_c.scatter(output_tensor, scatter_list, src=0, group=mesh)
 
-        if dist.get_rank() == 0:
-            self.assertEqual(output_tensor, torch.ones([2], device=device))
-        elif dist.get_rank() == 1:
-            self.assertEqual(output_tensor, torch.ones([2], device=device) * 5)
-        else:
-            raise ValueError("Unknown device")
+        self.assertEqual(output_tensor, tensors[dist.get_rank()])
 
     @parametrize("device", ["cpu", "cuda"])
     @run_with_both_funcol_impls
