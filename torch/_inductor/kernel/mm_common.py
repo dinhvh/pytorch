@@ -226,7 +226,7 @@ def mm_grid(m, n, meta):
     """
     The CUDA grid size for matmul triton templates.
     """
-    return (cdiv(m, meta["BLOCK_M"]) * cdiv(n, meta["BLOCK_N"]), 1, 1)
+    return (cdiv(m, meta["BLOCK_M"]) * cdiv(n, meta["BLOCK_N"]), SPLIT_K, 1)
 
 
 def acc_type(dtype):
